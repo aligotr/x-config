@@ -1,0 +1,51 @@
+{
+  "Name": "Hades Gate",
+  "GlobalProxy": "false",
+  "RouteOrder": "block-proxy-direct",
+  "RemoteDNSType": "DoH",
+  "RemoteDNSDomain": "dns.quad9.net",
+  "RemoteDNSIP": "9.9.9.9",
+  "DomesticDNSType": "DoH",
+  "DomesticDNSDomain": "common.dot.dns.yandex.net",
+  "DomesticDNSIP": "77.88.8.8",
+  "Geoipurl": "https://github.com/aligotr/rule-set-ru/releases/latest/download/geoip.dat",
+  "Geositeurl": "https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite.dat",
+  "LastUpdated": "",
+  "DnsHosts": {},
+  "DirectSites": [
+    "geosite:PRIVATE",
+    "yandex.ru",
+    "yandex.net"
+  ],
+  "DirectIp": [
+    "geoip:PRIVATE",
+    "77.88.8.8",
+    "77.88.8.1",
+    "77.88.8.88",
+    "77.88.8.2",
+    "77.88.8.7",
+    "77.88.8.3"
+  ],
+  "ProxySites": [
+    "domain:quad9.net",
+    "geosite:RU-BLOCKED",
+    "myip.com",
+    "dnsleaktest.com"
+  ],
+  "ProxyIp": [
+    "9.9.9.9",
+    "149.112.112.112",
+    "9.9.9.11",
+    "149.112.112.11",
+    "9.9.9.10",
+    "149.112.112.10",
+    "geoip:RU-BLOCKED"
+  ],
+  "BlockSites": [
+    "geosite:CATEGORY-ADS-ALL"
+  ],
+  "BlockIp": [],
+  "DomainStrategy": "IPIfNonMatch",
+  "FakeDNS": "true",
+  "UseChunkFiles": "true"
+}

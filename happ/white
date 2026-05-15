@@ -6,8 +6,8 @@
   "RemoteDNSDomain": "dns.quad9.net",
   "RemoteDNSIP": "9.9.9.9",
   "DomesticDNSType": "DoH",
-  "DomesticDNSDomain": "common.dot.dns.yandex.net",
-  "DomesticDNSIP": "77.88.8.8",
+  "DomesticDNSDomain": "safe.dot.dns.yandex.net",
+  "DomesticDNSIP": "77.88.8.88",
   "Geoipurl": "https://github.com/aligotr/rule-set-ru/releases/latest/download/geoip.dat",
   "Geositeurl": "https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite.dat",
   "LastUpdated": "",
@@ -18,7 +18,6 @@
   ],
   "DirectIp": [
     "geoip:PRIVATE",
-    "geoip:RU-WHITELIST",
     "77.88.8.8",
     "77.88.8.1",
     "77.88.8.88",

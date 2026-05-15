@@ -112,6 +112,14 @@ rule-providers:
     path: ./rules/geosite_block.mrs
     interval: 86400
 
+  geoip-direct:
+    type: http
+    behavior: ipcidr
+    format: mrs
+    url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geoip_direct.mrs
+    path: ./rules/geoip_direct.mrs
+    interval: 86400
+
   geosite-direct:
     type: http
     behavior: domain
@@ -179,6 +187,7 @@ rules:
   - IP-CIDR,77.88.8.2/32,DIRECT,no-resolve
   - IP-CIDR,77.88.8.7/32,DIRECT,no-resolve
   - IP-CIDR,77.88.8.3/32,DIRECT,no-resolve
+  - RULE-SET,geoip-direct,DIRECT,no-resolve
 
   # ➡️ Domain
   - DOMAIN-KEYWORD,yandex,DIRECT

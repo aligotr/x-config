@@ -14,21 +14,22 @@
   "DnsHosts": {},
   "DirectSites": [
     "geosite:PRIVATE",
-    "geosite:CATEGORY-GOV-RU"
+    "geosite:RU-WHITELIST"
   ],
   "DirectIp": [
     "geoip:PRIVATE",
-    "77.88.8.8",
-    "77.88.8.1",
-    "77.88.8.88",
-    "77.88.8.2",
-    "77.88.8.3",
-    "77.88.8.7"
+    "geoip:RU-WHITELIST"
   ],
-  "ProxySites": [],
-  "ProxyIp": [],
+  "ProxySites": [
+    "dns.adguard-dns.com",
+    "dns.google"
+  ],
+  "ProxyIp": [
+    "94.140.14.14",
+    "8.8.8.8"
+  ],
   "BlockSites": [
-    "geosite:CATEGORY-ADS-ALL"
+    "geosite:CATEGORY-ADS"
   ],
   "BlockIp": [],
   "DomainStrategy": "IPIfNonMatch",

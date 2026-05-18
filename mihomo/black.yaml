@@ -12,51 +12,72 @@ external-controller: 127.0.0.1:9090
 keep-alive-interval: 30
 enable-process: true
 find-process-mode: always
-unified-delay: false
+
+# Делать задержки более естественными (чтобы не выдавать автоматизацию)
+# Повышение точности тестирования скорости прокси-серверов
+# Рекомендуется держать включённым для стабильной работы
+unified-delay: true
+
 profile:
   store-selected: true
   store-fake-ip: true
 
-sniffer:
-  enable: true
-  force-dns-mapping: true
-  parse-pure-ip: true
-  sniff:
-    HTTP:
-      ports: [80, 8080-8880]
-      override-destination: true
-    TLS:
-      ports: [443, 8443]
-    QUIC:
-      ports: [443, 8443]
+# hosts:
+#   # Сопоставление адресов DoT-серверов
+#   "dns.quad9.net": ["9.9.9.9", "149.112.112.112"]
 
-hosts:
-  # Сопоставление адресов DoT-серверов
-  "dns.adguard-dns.com": ["94.140.14.14", "94.140.15.15"]
-  "dns.quad9.net": ["9.9.9.9", "149.112.112.112"]
-
+# -----------------------------------------------------------------------------
+# DNS
+# -----------------------------------------------------------------------------
 dns:
   enable: true
   ipv6: false
-  use-hosts: true
+
+  # Использование локальных сопоставлений domain -> ip
+  use-hosts: true  
+  # Использование системных сопоставлений domain -> ip
   use-system-hosts: true
+
+  # Режим работы DNS:
+  # redir-host — возврат реальных IP (лучше для совместимости с белым списком);
+  # fake-ip — возврат виртуальных IP из пула (быстрее, но может обнаруживаться приложениями).
   enhanced-mode: redir-host
-  listen: 127.0.0.1:6868
   # enhanced-mode: fake-ip
+  listen: 127.0.0.1:6868
   # fake-ip-range: 198.18.0.1/16
+
+  # Серверы для резолва доменов самих прокси-серверов
   default-nameserver:
     - system
-    - 94.140.14.14
-    - 94.140.15.15
+
+  # Серверы для доменов, не попадающих ни под какие правила
   nameserver:
     - system
-    - tls://dns.adguard-dns.com
-    - https://dns.adguard-dns.com/dns-query
+
+  # Серверы для доменов, попадающих под DIRECT-правила
   direct-nameserver:
     - system
+
+  # Серверы для доменов, попадающих под PROXY-правила
   proxy-server-nameserver:
-    - tls://dns.quad9.net
+    - tls://9.9.9.9:853
     - https://dns.quad9.net/dns-query
+
+  # Резервные серверы разрешения доменных имен
+  fallback:
+    - tls://9.9.9.9:853
+    - https://dns.quad9.net/dns-query
+    - tls://1.1.1.1:853
+    - https://dns.cloudflare.com/dns-query
+
+  fallback-filter:
+    geoip: true
+    geoip-code: RU
+    ipcidr:
+      - 0.0.0.0/32
+      - 127.0.0.0/8
+      - 240.0.0.0/4
+
   fake-ip-filter:
     - "*.lan"
     - stun.*.*.*
@@ -91,74 +112,151 @@ dns:
     - speedtest.cros.wr.pvp.net
 
 # -----------------------------------------------------------------------------
+# Sniffer
+# -----------------------------------------------------------------------------
+
+# Функция "подслушивания" трафика для определения доменных имён
+# Позволяет корректно маршрутизировать трафик даже при подключении по IP-адресу
+# Критически важно для работы правил на основе доменных имён
+sniffer:
+  enable: true    # Включить сниффер
+  parse-pure-ip: true    # Анализировать IP-адреса без домена
+  force-dns-mapping: true    # Принудительно использовать DNS-маппинг
+  sniff:    # Настройки для различных протоколов
+    HTTP:
+      ports: [80, 8080-8880]    # Порты для HTTP-трафика
+      override-destination: true    # Подменять получателя трафика на домен
+    TLS:
+      ports: [443, 8443]    # Порты для HTTPS/TLS-трафика
+    QUIC:
+      ports: [443, 8443]    # Порты для QUIC-протокола (UDP/443)
+
+# -----------------------------------------------------------------------------
 # Proxies
 # -----------------------------------------------------------------------------
 proxies: # LEAVE THIS LINE!
 
+# -----------------------------------------------------------------------------
+# Proxy groups
+# -----------------------------------------------------------------------------
+# Иконки
+icon_direct: &icon_direct https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Direct.png
+icon_global: &icon_global https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png
+icon_speedtest: &icon_speedtest https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Speedtest.png
+icon_rocket: &icon_rocket https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Rocket.png
+icon_cloudflare: &icon_cloudflare https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Cloudflare.png
+icon_google: &icon_google https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google.png
+icon_youtube: &icon_youtube https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/YouTube.png
+icon_steam: &icon_steam https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Steam.png
+
+# Регулярное выражение для исключения российских прокси
+exclude_ru: &exclude_ru "(?i)🇷🇺|RU"
+
+# Конфигурация URL-тестирования для выбора fastest-прокси
+# Используется для url-test-групп (автоматический выбор по скорости)
+url_test: &url_test
+  url: http://www.gstatic.com/generate_204
+  interval: 300
+  lazy: false           # Тестирование при запуске
+  expected-status: 204
+  tolerance: 50         # Допустимая разница задержки (мс)
+
 proxy-groups:
+  - name: AUTO-FAST
+    <<: *url_test
+    type: url-test
+    icon: *icon_rocket
+    exclude-filter: *exclude_ru
+
+  - name: CheckIp
+    type: select
+    icon: *icon_speedtest
+    proxies:
+      - AUTO-FAST
+      - "→ Remnawave"
+      - DIRECT
+
+  - name: Steam
+    type: select
+    icon: *icon_steam
+    proxies:
+      - DIRECT
+      - AUTO-FAST
+      - "→ Remnawave"
+
+  - name: YouTube
+    type: select
+    icon: *icon_youtube
+    exclude-filter: *exclude_ru
+    proxies:
+      - AUTO-FAST
+
   - name: "→ Remnawave"
     type: "select"
     proxies: # LEAVE THIS LINE!
+
+# -----------------------------------------------------------------------------
+# Rule provider bases
+# -----------------------------------------------------------------------------
+
+rule_provider_base: &rule_provider_base
+  type: http    # Тип: HTTP (скачивать из интернета)
+  interval: 86400    # Интервал обновления: 24 часа
+
+rule_behavior_domain_mrs: &rule_behavior_domain_mrs
+  <<: *rule_provider_base
+  behavior: domain    # Тип правила: домены
+  format: mrs    # Формат: Meta Ruleset
+
+rule_behavior_ipcidr_mrs: &rule_behavior_ipcidr_mrs
+  <<: *rule_provider_base
+  behavior: ipcidr    # Тип правила: IP-диапазоны
+  format: mrs    # Формат: Meta Ruleset
+
+# Специальный шаблон для классических правил (torrent-clients)
+rule_behavior_classical_yaml: &rule_behavior_classical_yaml
+  <<: *rule_provider_base
+  behavior: classical    # Тип правила: классический
+  format: yaml    # Формат: YAML
 
 # -----------------------------------------------------------------------------
 # Rule providers
 # -----------------------------------------------------------------------------
 rule-providers:
   geosite-block:
-    type: http
-    behavior: domain
-    format: mrs
+    <<: *rule_behavior_domain_mrs
     url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite_block.mrs
     path: ./rules/geosite_block.mrs
-    interval: 86400
 
   geoip-direct:
-    type: http
-    behavior: ipcidr
-    format: mrs
+    <<: *rule_behavior_ipcidr_mrs
     url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geoip_direct.mrs
     path: ./rules/geoip_direct.mrs
-    interval: 86400
 
   geosite-direct:
-    type: http
-    behavior: domain
-    format: mrs
+    <<: *rule_behavior_domain_mrs
     url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite_direct.mrs
     path: ./rules/geosite_direct.mrs
-    interval: 86400
 
   geoip-proxy:
-    type: http
-    behavior: ipcidr
-    format: mrs
+    <<: *rule_behavior_ipcidr_mrs
     url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geoip_proxy.mrs
     path: ./rules/geoip_proxy.mrs
-    interval: 86400
 
   geosite-proxy:
-    type: http
-    behavior: domain
-    format: mrs
+    <<: *rule_behavior_domain_mrs
     url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite_proxy.mrs
     path: ./rules/geosite_proxy.mrs
-    interval: 86400
 
   apps-direct:
-    type: http
-    behavior: classical
-    format: yaml
+    <<: *rule_behavior_classical_yaml
     url: https://github.com/aligotr/rule-set-ru/releases/latest/download/apps_direct.yaml
     path: ./rules/apps_direct.yaml
-    interval: 86400
 
   apps-proxy:
-    type: http
-    behavior: classical
-    format: yaml
+    <<: *rule_behavior_classical_yaml
     url: https://github.com/aligotr/rule-set-ru/releases/latest/download/apps_proxy.yaml
     path: ./rules/apps_proxy.yaml
-    interval: 86400
 
 # -----------------------------------------------------------------------------
 # Rules
@@ -171,48 +269,37 @@ rules:
   # 🚫 Реклама
   - RULE-SET,geosite-block,REJECT
 
-  # --- Локальная сеть ---
+  # --- 🏠 Локальная сеть ---
   - GEOIP,PRIVATE,DIRECT,no-resolve
   - GEOSITE,PRIVATE,DIRECT
 
-  # --- Процессы ---
+  # --- 📦 Процессы ---
   - RULE-SET,apps-direct,DIRECT
-  - RULE-SET,apps-proxy,→ Remnawave
+  - RULE-SET,apps-proxy,AUTO-FAST
   
-  # --- DIRECT ---
-  # ➡️ DNS - IP
-  - IP-CIDR,77.88.8.8/32,DIRECT,no-resolve
-  - IP-CIDR,77.88.8.1/32,DIRECT,no-resolve
-  - IP-CIDR,77.88.8.88/32,DIRECT,no-resolve
-  - IP-CIDR,77.88.8.2/32,DIRECT,no-resolve
-  - IP-CIDR,77.88.8.7/32,DIRECT,no-resolve
-  - IP-CIDR,77.88.8.3/32,DIRECT,no-resolve
-  - RULE-SET,geoip-direct,DIRECT,no-resolve
-
-  # ➡️ Domain
-  - DOMAIN-KEYWORD,yandex,DIRECT
-  - RULE-SET,geosite-direct,DIRECT
-
-  # --- PROXY ---
-  # 🔁 DNS - IP
-  - IP-CIDR,9.9.9.9/32,→ Remnawave,no-resolve
-  - IP-CIDR,149.112.112.112/32,→ Remnawave,no-resolve
-  - IP-CIDR,9.9.9.11/32,→ Remnawave,no-resolve
-  - IP-CIDR,149.112.112.11/32,→ Remnawave,no-resolve
-  - IP-CIDR,9.9.9.10/32,→ Remnawave,no-resolve
-  - IP-CIDR,149.112.112.10/32,→ Remnawave,no-resolve
-
-  # 🔁 DNS - Domain
-  - DOMAIN-SUFFIX,quad9.net,→ Remnawave
-
+  # --- DNS ---
   # 🔁 IP
-  - RULE-SET,geoip-proxy,→ Remnawave
+  - IP-CIDR,9.9.9.9/32,AUTO-FAST,no-resolve
+  - IP-CIDR,1.1.1.1/32,AUTO-FAST,no-resolve
 
   # 🔁 Domain
-  - RULE-SET,geosite-proxy,→ Remnawave
+  - DOMAIN,dns.quad9.net,AUTO-FAST
+  - DOMAIN,dns.cloudflare.com,AUTO-FAST
 
-  # 🔁 Test
-  - OR,((DOMAIN-SUFFIX,myip.com),(DOMAIN-SUFFIX,dnsleaktest.com)),→ Remnawave
+  # --- 🔁 PROXY ---
+  - OR,((GEOSITE,youtube),(GEOIP,youtube)),YouTube
+  - OR,((GEOSITE,steam),(GEOIP,steam)),Steam
+
+  # Test
+  - OR,((DOMAIN-SUFFIX,myip.com),(DOMAIN-SUFFIX,dnsleaktest.com)),CheckIp
+
+  # --- ➡️ RULES - DIRECT ---
+  - RULE-SET,geoip-direct,DIRECT
+  - RULE-SET,geosite-direct,DIRECT
+
+  # --- 🔁 RULES - PROXY ---
+  - RULE-SET,geoip-proxy,AUTO-FAST
+  - RULE-SET,geosite-proxy,AUTO-FAST
 
   # --- 🏁 FINAL ---
   - MATCH,DIRECT

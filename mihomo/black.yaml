@@ -2,14 +2,12 @@
 # Main
 # -----------------------------------------------------------------------------
 log-level: silent
-mixed-port: 7890
-socks-port: 7891
-redir-port: 7892
+
 mode: rule
 ipv6: false
 allow-lan: true
-external-controller: 127.0.0.1:9090
 keep-alive-interval: 30
+
 enable-process: true
 find-process-mode: always
 
@@ -22,29 +20,18 @@ profile:
   store-selected: true
   store-fake-ip: true
 
-# hosts:
-#   # Сопоставление адресов DoT-серверов
-#   "dns.quad9.net": ["9.9.9.9", "149.112.112.112"]
-
 # -----------------------------------------------------------------------------
 # DNS
 # -----------------------------------------------------------------------------
 dns:
   enable: true
   ipv6: false
+  listen: 127.0.0.1:6868
 
   # Использование локальных сопоставлений domain -> ip
   use-hosts: true  
   # Использование системных сопоставлений domain -> ip
   use-system-hosts: true
-
-  # Режим работы DNS:
-  # redir-host — возврат реальных IP (лучше для совместимости с белым списком);
-  # fake-ip — возврат виртуальных IP из пула (быстрее, но может обнаруживаться приложениями).
-  enhanced-mode: redir-host
-  # enhanced-mode: fake-ip
-  listen: 127.0.0.1:6868
-  # fake-ip-range: 198.18.0.1/16
 
   # Серверы для резолва доменов самих прокси-серверов
   default-nameserver:
@@ -78,6 +65,11 @@ dns:
       - 127.0.0.0/8
       - 240.0.0.0/4
 
+  # Режим работы DNS:
+  # redir-host — возврат реальных IP (лучше для совместимости с белым списком);
+  # fake-ip — возврат виртуальных IP из пула (быстрее, но может обнаруживаться приложениями).
+  enhanced-mode: redir-host
+  fake-ip-range: 198.18.0.1/16
   fake-ip-filter:
     - "*.lan"
     - stun.*.*.*
@@ -140,17 +132,11 @@ proxies: # LEAVE THIS LINE!
 # Proxy groups
 # -----------------------------------------------------------------------------
 # Иконки
-icon_direct: &icon_direct https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Direct.png
-icon_global: &icon_global https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png
-icon_speedtest: &icon_speedtest https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Speedtest.png
-icon_rocket: &icon_rocket https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Rocket.png
-icon_cloudflare: &icon_cloudflare https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Cloudflare.png
-icon_google: &icon_google https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google.png
+icon_random: &icon_random https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Round_Robin.png
 icon_youtube: &icon_youtube https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/YouTube.png
-icon_steam: &icon_steam https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Steam.png
 
 # Регулярное выражение для исключения российских прокси
-exclude_ru: &exclude_ru "(?i)🇷🇺|RU"
+exclude_ru: &exclude_ru "(?i)🇷🇺|RU|Россия"
 
 # Конфигурация URL-тестирования для выбора fastest-прокси
 # Используется для url-test-групп (автоматический выбор по скорости)
@@ -161,39 +147,52 @@ url_test: &url_test
   expected-status: 204
   tolerance: 50         # Допустимая разница задержки (мс)
 
+url_fallback: &url_fallback
+  url: http://www.gstatic.com/generate_204
+  interval: 600
+
 proxy-groups:
-  - name: AUTO-FAST
+  - name: REMNAWAVE
+    icon: *icon_random
+    type: select
+    exclude-filter: *exclude_ru
+    proxies: # LEAVE THIS LINE!
+
+  - name: FALLBACK
+    <<: *url_fallback
+    type: fallback
+    hidden: true
+    include-all: true
+    remnawave:
+      include-proxies: false
+    proxies: # LEAVE THIS LINE!
+
+  - name: FASTEST
     <<: *url_test
     type: url-test
-    icon: *icon_rocket
-    exclude-filter: *exclude_ru
-
-  - name: CheckIp
-    type: select
-    icon: *icon_speedtest
-    proxies:
-      - AUTO-FAST
-      - "→ Remnawave"
-      - DIRECT
-
-  - name: Steam
-    type: select
-    icon: *icon_steam
-    proxies:
-      - DIRECT
-      - AUTO-FAST
-      - "→ Remnawave"
-
-  - name: YouTube
-    type: select
-    icon: *icon_youtube
-    exclude-filter: *exclude_ru
-    proxies:
-      - AUTO-FAST
-
-  - name: "→ Remnawave"
-    type: "select"
+    hidden: true
+    include-all: true
+    remnawave:
+      include-proxies: false
     proxies: # LEAVE THIS LINE!
+
+  - name: PROXY
+    type: select
+    remnawave:
+      include-proxies: false
+    proxies:
+      - REMNAWAVE
+      - FASTEST
+      - FALLBACK
+
+  - name: YOUTUBE
+    icon: *icon_youtube
+    type: select
+    remnawave:
+      include-proxies: false
+    proxies:
+      - FASTEST
+      - PROXY
 
 # -----------------------------------------------------------------------------
 # Rule provider bases
@@ -223,20 +222,15 @@ rule_behavior_classical_yaml: &rule_behavior_classical_yaml
 # Rule providers
 # -----------------------------------------------------------------------------
 rule-providers:
-  geosite-block:
-    <<: *rule_behavior_domain_mrs
-    url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite_block.mrs
-    path: ./rules/geosite_block.mrs
+  apps-direct:
+    <<: *rule_behavior_classical_yaml
+    url: https://github.com/aligotr/rule-set-ru/releases/latest/download/apps_windows_direct_mihomo.yaml
+    path: ./rules/apps_windows_direct_mihomo.yaml
 
-  geoip-direct:
-    <<: *rule_behavior_ipcidr_mrs
-    url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geoip_direct.mrs
-    path: ./rules/geoip_direct.mrs
-
-  geosite-direct:
-    <<: *rule_behavior_domain_mrs
-    url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite_direct.mrs
-    path: ./rules/geosite_direct.mrs
+  apps-proxy:
+    <<: *rule_behavior_classical_yaml
+    url: https://github.com/aligotr/rule-set-ru/releases/latest/download/apps_windows_proxy_mihomo.yaml
+    path: ./rules/apps_windows_proxy_mihomo.yaml
 
   geoip-proxy:
     <<: *rule_behavior_ipcidr_mrs
@@ -248,58 +242,51 @@ rule-providers:
     url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite_proxy.mrs
     path: ./rules/geosite_proxy.mrs
 
-  apps-direct:
-    <<: *rule_behavior_classical_yaml
-    url: https://github.com/aligotr/rule-set-ru/releases/latest/download/apps_direct.yaml
-    path: ./rules/apps_direct.yaml
+  geosite-bitwarden:
+    <<: *rule_behavior_domain_mrs
+    url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite_bitwarden.mrs
+    path: ./rules/geosite_bitwarden.mrs
 
-  apps-proxy:
-    <<: *rule_behavior_classical_yaml
-    url: https://github.com/aligotr/rule-set-ru/releases/latest/download/apps_proxy.yaml
-    path: ./rules/apps_proxy.yaml
+  geosite-youtube:
+    <<: *rule_behavior_domain_mrs
+    url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite_youtube.mrs
+    path: ./rules/geosite_youtube.mrs
 
 # -----------------------------------------------------------------------------
 # Rules
 # -----------------------------------------------------------------------------
 rules:
-  # --- BLOCK ---
-  # 🚫 HTTP3/QUIC
-  - AND,((NETWORK,udp),(DST-PORT,443)),REJECT
-
-  # 🚫 Реклама
-  - RULE-SET,geosite-block,REJECT
-
-  # --- 🏠 Локальная сеть ---
+# 🏠 Локальная сеть
   - GEOIP,PRIVATE,DIRECT,no-resolve
   - GEOSITE,PRIVATE,DIRECT
 
-  # --- 📦 Процессы ---
-  - RULE-SET,apps-direct,DIRECT
-  - RULE-SET,apps-proxy,AUTO-FAST
+# 🚫 BLOCK ---------------------------------------------------------------------
+  # HTTP3/QUIC
+  - AND,((NETWORK,udp),(DST-PORT,443)),REJECT
+
+  # Windows NetBIOS/SMB
+  - AND,((NETWORK,udp),(DST-PORT,135,137-139)),REJECT
+
+# DNS --------------------------------------------------------------------------
+  - IP-CIDR,9.9.9.9/32,PROXY,no-resolve
+  - IP-CIDR,1.1.1.1/32,PROXY,no-resolve
   
-  # --- DNS ---
-  # 🔁 IP
-  - IP-CIDR,9.9.9.9/32,AUTO-FAST,no-resolve
-  - IP-CIDR,1.1.1.1/32,AUTO-FAST,no-resolve
+  - DOMAIN,dns.quad9.net,PROXY
+  - DOMAIN,dns.cloudflare.com,PROXY
 
-  # 🔁 Domain
-  - DOMAIN,dns.quad9.net,AUTO-FAST
-  - DOMAIN,dns.cloudflare.com,AUTO-FAST
+# Tests ------------------------------------------------------------------------
+  - OR,((DOMAIN-SUFFIX,myip.com),(DOMAIN-SUFFIX,dnsleaktest.com)),PROXY
+  - OR,((DOMAIN-SUFFIX,ip.sb),(DOMAIN-SUFFIX,ipip.net),(DOMAIN-SUFFIX,ipwho.is)),PROXY
 
-  # --- 🔁 PROXY ---
-  - OR,((GEOSITE,youtube),(GEOIP,youtube)),YouTube
-  - OR,((GEOSITE,steam),(GEOIP,steam)),Steam
+# ➡️ DIRECT --------------------------------------------------------------------
+  - RULE-SET,apps-direct,DIRECT # 📦 Процессы
+  - RULE-SET,geosite-bitwarden,DIRECT
 
-  # Test
-  - OR,((DOMAIN-SUFFIX,myip.com),(DOMAIN-SUFFIX,dnsleaktest.com)),CheckIp
+# 🔁 PROXY ---------------------------------------------------------------------
+  - RULE-SET,geosite-youtube,YOUTUBE
+  - RULE-SET,apps-proxy,PROXY # 📦 Процессы
+  - RULE-SET,geoip-proxy,PROXY
+  - RULE-SET,geosite-proxy,PROXY
 
-  # --- ➡️ RULES - DIRECT ---
-  - RULE-SET,geoip-direct,DIRECT
-  - RULE-SET,geosite-direct,DIRECT
-
-  # --- 🔁 RULES - PROXY ---
-  - RULE-SET,geoip-proxy,AUTO-FAST
-  - RULE-SET,geosite-proxy,AUTO-FAST
-
-  # --- 🏁 FINAL ---
+# 🏁 FINAL ----------------------------------------------------------------------
   - MATCH,DIRECT

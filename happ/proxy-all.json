@@ -1,37 +1,42 @@
 {
   "Name": "Hades Gate",
-  "GlobalProxy": "false",
+  "GlobalProxy": "true",
   "RouteOrder": "block-direct-proxy",
   "RemoteDNSType": "DoH",
   "RemoteDNSDomain": "dns.quad9.net",
   "RemoteDNSIP": "9.9.9.9",
   "DomesticDNSType": "DoH",
   "DomesticDNSDomain": "safe.dot.dns.yandex.net",
-  "DomesticDNSIP": "77.88.8.8",
+  "DomesticDNSIP": "77.88.8.88",
   "Geoipurl": "https://github.com/aligotr/rule-set-ru/releases/latest/download/geoip.dat",
   "Geositeurl": "https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite.dat",
   "LastUpdated": "",
   "DnsHosts": {},
   "DirectSites": [
     "geosite:PRIVATE",
-    "dns.yandex.net",
+    "domain:common.dot.dns.yandex.net",
+    "domain:safe.dot.dns.yandex.net",
+    "domain:family.dot.dns.yandex.net",
     "geosite:RU-DIRECT"
   ],
   "DirectIp": [
     "geoip:PRIVATE",
-    "77.88.8.8"
+    "77.88.8.8/32",
+    "77.88.8.1/32",
+    "77.88.8.88/32",
+    "77.88.8.2/32",
+    "77.88.8.3/32",
+    "77.88.8.7/32",
+    "geoip:RU-DIRECT"
   ],
   "ProxySites": [
-    "dns.quad9.net",
-    "geosite:RU-BLOCKED",
-    "myip.com"
+    "domain:dns.quad9.net"
   ],
   "ProxyIp": [
-    "9.9.9.9"
+    "9.9.9.9/32",
+    "149.112.112.112/32"
   ],
-  "BlockSites": [
-    "geosite:CATEGORY-ADS"
-  ],
+  "BlockSites": [],
   "BlockIp": [],
   "DomainStrategy": "IPIfNonMatch",
   "FakeDNS": "true",

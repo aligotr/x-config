@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------------
-log-level: silent
+log-level: silent # silent, debug
 
 mode: rule
 ipv6: false
@@ -47,15 +47,15 @@ dns:
 
   # Серверы для доменов, попадающих под PROXY-правила
   proxy-server-nameserver:
-    - tls://9.9.9.9:853
-    - https://dns.quad9.net/dns-query
+    - https://dns.cloudflare.com/dns-query#proxy=PROXY
+
+  proxy-server-nameserver-policy:
+    rule-set:geosite-youtube:
+      - https://mozilla.cloudflare-dns.com/dns-query#proxy=PROXY
 
   # Резервные серверы разрешения доменных имен
   fallback:
-    - tls://9.9.9.9:853
-    - https://dns.quad9.net/dns-query
-    - tls://1.1.1.1:853
-    - https://dns.cloudflare.com/dns-query
+    - https://freedns.controld.com/p1#proxy=PROXY
 
   fallback-filter:
     geoip: true
@@ -88,10 +88,6 @@ dns:
     - time5.apple.com
     - time6.apple.com
     - time7.apple.com
-    - time1.google.com
-    - time2.google.com
-    - time3.google.com
-    - time4.google.com
     - api.joox.com
     - joox.com
     - "*.xiami.com"
@@ -102,6 +98,37 @@ dns:
     - xbox.*.*.microsoft.com
     - "*.ipv6.microsoft.com"
     - speedtest.cros.wr.pvp.net
+
+# -----------------------------------------------------------------------------
+# Tun
+# -----------------------------------------------------------------------------
+tun:
+  enable: true
+  stack: mixed
+  device: mihomo
+  auto-route: true
+  auto-detect-interface: true
+  strict-route: true
+  dns-hijack:
+    - any:53
+  exclude-address:
+    - 0.0.0.0/8
+    - 10.0.0.0/8
+    - 100.64.0.0/10
+    - 127.0.0.0/8
+    - 169.254.0.0/16
+    - 172.16.0.0/12
+    - 192.0.0.0/24
+    - 192.0.2.0/24
+    - 192.88.99.0/24
+    - 192.168.0.0/16
+    - 198.51.100.0/24
+    - 203.0.113.0/24
+    - 224.0.0.0/3
+    - ::1/127
+    - fc00::/7
+    - fe80::/10
+    - ff00::/8
 
 # -----------------------------------------------------------------------------
 # Sniffer
@@ -133,6 +160,7 @@ proxies: # LEAVE THIS LINE!
 # -----------------------------------------------------------------------------
 # Иконки
 icon_random: &icon_random https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Round_Robin.png
+icon_rocket: &icon_rocket https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Rocket.png
 icon_youtube: &icon_youtube https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/YouTube.png
 
 # Регулярное выражение для исключения российских прокси
@@ -169,6 +197,7 @@ proxy-groups:
 
   - name: FASTEST
     <<: *url_test
+    icon: *icon_rocket
     type: url-test
     hidden: true
     include-all: true
@@ -227,6 +256,16 @@ rule-providers:
     url: https://github.com/aligotr/rule-set-ru/releases/latest/download/apps_windows_direct_mihomo.yaml
     path: ./rules/apps_windows_direct_mihomo.yaml
 
+  geoip-direct:
+    <<: *rule_behavior_ipcidr_mrs
+    url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geoip_direct.mrs
+    path: ./rules/geoip_direct.mrs
+
+  geosite-direct:
+    <<: *rule_behavior_domain_mrs
+    url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite_direct.mrs
+    path: ./rules/geosite_direct.mrs
+
   apps-proxy:
     <<: *rule_behavior_classical_yaml
     url: https://github.com/aligotr/rule-set-ru/releases/latest/download/apps_windows_proxy_mihomo.yaml
@@ -267,19 +306,14 @@ rules:
   # Windows NetBIOS/SMB
   - AND,((NETWORK,udp),(DST-PORT,135,137-139)),REJECT
 
-# DNS --------------------------------------------------------------------------
-  - IP-CIDR,9.9.9.9/32,PROXY,no-resolve
-  - IP-CIDR,1.1.1.1/32,PROXY,no-resolve
-  
-  - DOMAIN,dns.quad9.net,PROXY
-  - DOMAIN,dns.cloudflare.com,PROXY
-
 # Tests ------------------------------------------------------------------------
   - OR,((DOMAIN-SUFFIX,myip.com),(DOMAIN-SUFFIX,dnsleaktest.com)),PROXY
-  - OR,((DOMAIN-SUFFIX,ip.sb),(DOMAIN-SUFFIX,ipip.net),(DOMAIN-SUFFIX,ipwho.is)),PROXY
+  - OR,((DOMAIN-SUFFIX,2ip.io),(DOMAIN-SUFFIX,ip.sb),(DOMAIN-SUFFIX,ipip.net),(DOMAIN-SUFFIX,ipwho.is)),PROXY
 
 # ➡️ DIRECT --------------------------------------------------------------------
   - RULE-SET,apps-direct,DIRECT # 📦 Процессы
+  - RULE-SET,geoip-direct,DIRECT
+  - RULE-SET,geosite-direct,DIRECT
   - RULE-SET,geosite-bitwarden,DIRECT
 
 # 🔁 PROXY ---------------------------------------------------------------------
@@ -288,5 +322,5 @@ rules:
   - RULE-SET,geoip-proxy,PROXY
   - RULE-SET,geosite-proxy,PROXY
 
-# 🏁 FINAL ----------------------------------------------------------------------
+# 🏁 FINAL ---------------------------------------------------------------------
   - MATCH,DIRECT

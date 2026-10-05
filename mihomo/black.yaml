@@ -16,102 +16,30 @@ find-process-mode: always
 # Рекомендуется держать включённым для стабильной работы
 unified-delay: true
 
+# Одновременно проверяет несколько IP-адресов и использует самый быстрый для подключения
+tcp-concurrent: true
+
 profile:
   store-selected: true
   store-fake-ip: true
 
 # -----------------------------------------------------------------------------
-# DNS
-# -----------------------------------------------------------------------------
-dns:
-  enable: true
-  ipv6: false
-  listen: 127.0.0.1:6868
-
-  # Использование локальных сопоставлений domain -> ip
-  use-hosts: true  
-  # Использование системных сопоставлений domain -> ip
-  use-system-hosts: true
-
-  # Серверы для резолва доменов самих прокси-серверов
-  default-nameserver:
-    - system
-
-  # Серверы для доменов, не попадающих ни под какие правила
-  nameserver:
-    - system
-
-  # Серверы для доменов, попадающих под DIRECT-правила
-  direct-nameserver:
-    - system
-
-  # Серверы для доменов, попадающих под PROXY-правила
-  proxy-server-nameserver:
-    - https://dns.cloudflare.com/dns-query#proxy=PROXY
-
-  proxy-server-nameserver-policy:
-    rule-set:geosite-youtube:
-      - https://mozilla.cloudflare-dns.com/dns-query#proxy=PROXY
-
-  # Резервные серверы разрешения доменных имен
-  fallback:
-    - https://freedns.controld.com/p1#proxy=PROXY
-
-  fallback-filter:
-    geoip: true
-    geoip-code: RU
-    ipcidr:
-      - 0.0.0.0/32
-      - 127.0.0.0/8
-      - 240.0.0.0/4
-
-  # Режим работы DNS:
-  # redir-host — возврат реальных IP (лучше для совместимости с белым списком);
-  # fake-ip — возврат виртуальных IP из пула (быстрее, но может обнаруживаться приложениями).
-  enhanced-mode: redir-host
-  fake-ip-range: 198.18.0.1/16
-  fake-ip-filter:
-    - "*.lan"
-    - stun.*.*.*
-    - stun.*.*
-    - time.windows.com
-    - time.nist.gov
-    - time.apple.com
-    - time.asia.apple.com
-    - "*.openwrt.pool.ntp.org"
-    - pool.ntp.org
-    - ntp.ubuntu.com
-    - time1.apple.com
-    - time2.apple.com
-    - time3.apple.com
-    - time4.apple.com
-    - time5.apple.com
-    - time6.apple.com
-    - time7.apple.com
-    - api.joox.com
-    - joox.com
-    - "*.xiami.com"
-    - "*.msftconnecttest.com"
-    - "*.msftncsi.com"
-    - "+.xboxlive.com"
-    - "*.*.stun.playstation.net"
-    - xbox.*.*.microsoft.com
-    - "*.ipv6.microsoft.com"
-    - speedtest.cros.wr.pvp.net
-
-# -----------------------------------------------------------------------------
 # Tun
 # -----------------------------------------------------------------------------
+mixed-port: 7890
+socks-port: 7891
+redir-port: 7892
 tun:
   enable: true
   stack: mixed
   device: mihomo
-  auto-route: true
   auto-detect-interface: true
+  auto-route: true
   strict-route: true
   dns-hijack:
     - any:53
-  exclude-address:
+    - tcp://any:53
+  route-exclude-address: # Исключить из перехвата приватные и зарезервированные IP-адреса
     - 0.0.0.0/8
     - 10.0.0.0/8
     - 100.64.0.0/10
@@ -131,6 +59,56 @@ tun:
     - ff00::/8
 
 # -----------------------------------------------------------------------------
+# DNS
+# -----------------------------------------------------------------------------
+dns:
+  enable: true
+  ipv6: false
+
+  # Использование локальных сопоставлений domain -> ip
+  use-hosts: true  
+  # Использование системных сопоставлений domain -> ip
+  use-system-hosts: true
+
+  # Серверы для резолва доменов самих прокси-серверов
+  default-nameserver:
+    - system
+
+  # Серверы для доменов, попадающих под DIRECT-правила
+  direct-nameserver:
+    - system
+
+  # Серверы для доменов, попадающих под PROXY-правила
+  proxy-server-nameserver:
+    - https://cloudflare-dns.com/dns-query#proxy=PROXY
+
+  proxy-server-nameserver-policy:
+    rule-set:geosite-youtube:
+      - https://mozilla.cloudflare-dns.com/dns-query#proxy=PROXY
+
+  # Серверы для доменов, не попадающих ни под какие правила
+  nameserver:
+    - https://cloudflare-dns.com/dns-query#proxy=PROXY
+
+  # Резервные серверы разрешения доменных имен
+  fallback:
+    - https://freedns.controld.com/p1#proxy=PROXY
+
+  # Режим работы DNS:
+  # redir-host — возврат реальных IP (лучше для совместимости с белым списком);
+  # fake-ip — возврат виртуальных IP из пула (быстрее, но может обнаруживаться приложениями).
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  fake-ip-filter-mode: blacklist
+  fake-ip-filter:
+    - "*.lan"
+    - stun.*.*.*
+    - stun.*.*
+    - time.windows.com
+    - time.apple.com
+    - pool.ntp.org
+
+# -----------------------------------------------------------------------------
 # Sniffer
 # -----------------------------------------------------------------------------
 
@@ -141,10 +119,11 @@ sniffer:
   enable: true    # Включить сниффер
   parse-pure-ip: true    # Анализировать IP-адреса без домена
   force-dns-mapping: true    # Принудительно использовать DNS-маппинг
+  override-destination: false # Подменять получателя трафика на домен
   sniff:    # Настройки для различных протоколов
     HTTP:
       ports: [80, 8080-8880]    # Порты для HTTP-трафика
-      override-destination: true    # Подменять получателя трафика на домен
+      override-destination: true
     TLS:
       ports: [443, 8443]    # Порты для HTTPS/TLS-трафика
     QUIC:
@@ -162,6 +141,9 @@ proxies: # LEAVE THIS LINE!
 icon_random: &icon_random https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Round_Robin.png
 icon_rocket: &icon_rocket https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Rocket.png
 icon_youtube: &icon_youtube https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/YouTube.png
+icon_instagram: &icon_instagram https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Instagram.png
+icon_discord: &icon_discord https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Discord.png
+icon_telegram: &icon_telegram https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Telegram.png
 
 # Регулярное выражение для исключения российских прокси
 exclude_ru: &exclude_ru "(?i)🇷🇺|RU|Россия"
@@ -175,24 +157,11 @@ url_test: &url_test
   expected-status: 204
   tolerance: 50         # Допустимая разница задержки (мс)
 
-url_fallback: &url_fallback
-  url: http://www.gstatic.com/generate_204
-  interval: 600
-
 proxy-groups:
   - name: REMNAWAVE
     icon: *icon_random
     type: select
     exclude-filter: *exclude_ru
-    proxies: # LEAVE THIS LINE!
-
-  - name: FALLBACK
-    <<: *url_fallback
-    type: fallback
-    hidden: true
-    include-all: true
-    remnawave:
-      include-proxies: false
     proxies: # LEAVE THIS LINE!
 
   - name: FASTEST
@@ -212,13 +181,31 @@ proxy-groups:
     proxies:
       - REMNAWAVE
       - FASTEST
-      - FALLBACK
 
+  - name: DISCORD
+    icon: *icon_discord
+    type: select
+    proxies:
+      - FASTEST
+      - PROXY
+
+  - name: TELEGRAM
+    icon: *icon_telegram
+    type: select
+    proxies:
+      - FASTEST
+      - PROXY
+
+  - name: INSTAGRAM
+    icon: *icon_instagram
+    type: select
+    proxies:
+      - FASTEST
+      - PROXY
+      
   - name: YOUTUBE
     icon: *icon_youtube
     type: select
-    remnawave:
-      include-proxies: false
     proxies:
       - FASTEST
       - PROXY
@@ -286,10 +273,30 @@ rule-providers:
     url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite_bitwarden.mrs
     path: ./rules/geosite_bitwarden.mrs
 
+  geosite-google:
+    <<: *rule_behavior_domain_mrs
+    url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite_google.mrs
+    path: ./rules/geosite_google.mrs
+
   geosite-youtube:
     <<: *rule_behavior_domain_mrs
     url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite_youtube.mrs
     path: ./rules/geosite_youtube.mrs
+
+  geosite-instagram:
+    <<: *rule_behavior_domain_mrs
+    url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite_instagram.mrs
+    path: ./rules/geosite_instagram.mrs
+
+  geosite-discord:
+    <<: *rule_behavior_domain_mrs
+    url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite_discord.mrs
+    path: ./rules/geosite_discord.mrs
+
+  geosite-telegram:
+    <<: *rule_behavior_domain_mrs
+    url: https://github.com/aligotr/rule-set-ru/releases/latest/download/geosite_telegram.mrs
+    path: ./rules/geosite_telegram.mrs
 
 # -----------------------------------------------------------------------------
 # Rules
@@ -301,7 +308,10 @@ rules:
 
 # 🚫 BLOCK ---------------------------------------------------------------------
   # HTTP3/QUIC
-  - AND,((NETWORK,udp),(DST-PORT,443)),REJECT
+  - AND,((NETWORK,UDP),(DST-PORT,443)),REJECT-DROP
+  
+  # IPv6-трафик, не попавший в fake-ip
+  - IP-CIDR,::/0,REJECT-DROP,no-resolve
 
   # Windows NetBIOS/SMB
   - AND,((NETWORK,udp),(DST-PORT,135,137-139)),REJECT
@@ -317,7 +327,12 @@ rules:
   - RULE-SET,geosite-bitwarden,DIRECT
 
 # 🔁 PROXY ---------------------------------------------------------------------
+  - RULE-SET,geosite-telegram,TELEGRAM
+  - PROCESS-NAME-REGEX,discord,DISCORD
+  - RULE-SET,geosite-discord,DISCORD
+  - RULE-SET,geosite-instagram,INSTAGRAM
   - RULE-SET,geosite-youtube,YOUTUBE
+  - RULE-SET,geosite-google,PROXY
   - RULE-SET,apps-proxy,PROXY # 📦 Процессы
   - RULE-SET,geoip-proxy,PROXY
   - RULE-SET,geosite-proxy,PROXY

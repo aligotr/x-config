@@ -1,14 +1,13 @@
 # -----------------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------------
-log-level: silent # silent, debug
+log-level: silent # silent, debug, warning
 
 mode: rule
 ipv6: false
-allow-lan: true
+allow-lan: false
 keep-alive-interval: 30
 
-enable-process: true
 find-process-mode: always
 
 # Делать задержки более естественными (чтобы не выдавать автоматизацию)
@@ -21,7 +20,8 @@ tcp-concurrent: true
 
 profile:
   store-selected: true
-  store-fake-ip: true
+  # Сохранение таблицы fake-ip между перезапусками
+  store-fake-ip: true # Указано прозапас, если вдруг будет использоваться fake-ip
 
 # -----------------------------------------------------------------------------
 # Tun
@@ -59,59 +59,8 @@ tun:
     - ff00::/8
 
 # -----------------------------------------------------------------------------
-# DNS
-# -----------------------------------------------------------------------------
-dns:
-  enable: true
-  ipv6: false
-
-  # Использование локальных сопоставлений domain -> ip
-  use-hosts: true  
-  # Использование системных сопоставлений domain -> ip
-  use-system-hosts: true
-
-  # Серверы для резолва доменов самих прокси-серверов
-  default-nameserver:
-    - system
-
-  # Серверы для доменов, попадающих под DIRECT-правила
-  direct-nameserver:
-    - system
-
-  # Серверы для доменов, попадающих под PROXY-правила
-  proxy-server-nameserver:
-    - https://cloudflare-dns.com/dns-query#proxy=PROXY
-
-  proxy-server-nameserver-policy:
-    rule-set:geosite-youtube:
-      - https://mozilla.cloudflare-dns.com/dns-query#proxy=PROXY
-
-  # Серверы для доменов, не попадающих ни под какие правила
-  nameserver:
-    - https://cloudflare-dns.com/dns-query#proxy=PROXY
-
-  # Резервные серверы разрешения доменных имен
-  fallback:
-    - https://freedns.controld.com/p1#proxy=PROXY
-
-  # Режим работы DNS:
-  # redir-host — возврат реальных IP (лучше для совместимости с белым списком);
-  # fake-ip — возврат виртуальных IP из пула (быстрее, но может обнаруживаться приложениями).
-  enhanced-mode: fake-ip
-  fake-ip-range: 198.18.0.1/16
-  fake-ip-filter-mode: blacklist
-  fake-ip-filter:
-    - "*.lan"
-    - stun.*.*.*
-    - stun.*.*
-    - time.windows.com
-    - time.apple.com
-    - pool.ntp.org
-
-# -----------------------------------------------------------------------------
 # Sniffer
 # -----------------------------------------------------------------------------
-
 # Функция "подслушивания" трафика для определения доменных имён
 # Позволяет корректно маршрутизировать трафик даже при подключении по IP-адресу
 # Критически важно для работы правил на основе доменных имён
@@ -119,15 +68,16 @@ sniffer:
   enable: true    # Включить сниффер
   parse-pure-ip: true    # Анализировать IP-адреса без домена
   force-dns-mapping: true    # Принудительно использовать DNS-маппинг
-  override-destination: false # Подменять получателя трафика на домен
+  override-destination: true # Подменять получателя трафика на домен
   sniff:    # Настройки для различных протоколов
     HTTP:
       ports: [80, 8080-8880]    # Порты для HTTP-трафика
       override-destination: true
     TLS:
       ports: [443, 8443]    # Порты для HTTPS/TLS-трафика
-    QUIC:
-      ports: [443, 8443]    # Порты для QUIC-протокола (UDP/443)
+    # Не сниффится, т.к. блокируется правилом UDP/443
+    # QUIC:
+    #   ports: [443, 8443]    # Порты для QUIC-протокола (UDP/443)
 
 # -----------------------------------------------------------------------------
 # Proxies
@@ -146,7 +96,7 @@ icon_discord: &icon_discord https://cdn.jsdelivr.net/gh/Koolson/Qure@master/Icon
 icon_telegram: &icon_telegram https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Telegram.png
 
 # Регулярное выражение для исключения российских прокси
-exclude_ru: &exclude_ru "(?i)🇷🇺|RU|Россия"
+exclude_ru: &exclude_ru "(?i)🇷🇺|(^|[^a-z])RU([^a-z]|$)|Россия|Russia|Москва|Moscow"
 
 # Конфигурация URL-тестирования для выбора fastest-прокси
 # Используется для url-test-групп (автоматический выбор по скорости)
@@ -170,6 +120,7 @@ proxy-groups:
     type: url-test
     hidden: true
     include-all: true
+    exclude-filter: *exclude_ru
     remnawave:
       include-proxies: false
     proxies: # LEAVE THIS LINE!
@@ -178,42 +129,31 @@ proxy-groups:
     type: select
     remnawave:
       include-proxies: false
-    proxies:
-      - REMNAWAVE
-      - FASTEST
+    proxies: [ REMNAWAVE, FASTEST ]
 
   - name: DISCORD
     icon: *icon_discord
     type: select
-    proxies:
-      - FASTEST
-      - PROXY
+    proxies: [ FASTEST ]
 
   - name: TELEGRAM
     icon: *icon_telegram
     type: select
-    proxies:
-      - FASTEST
-      - PROXY
+    proxies: [ FASTEST ]
 
   - name: INSTAGRAM
     icon: *icon_instagram
     type: select
-    proxies:
-      - FASTEST
-      - PROXY
+    proxies: [ FASTEST ]
       
   - name: YOUTUBE
     icon: *icon_youtube
     type: select
-    proxies:
-      - FASTEST
-      - PROXY
+    proxies: [ FASTEST ]
 
 # -----------------------------------------------------------------------------
 # Rule provider bases
 # -----------------------------------------------------------------------------
-
 rule_provider_base: &rule_provider_base
   type: http    # Тип: HTTP (скачивать из интернета)
   interval: 86400    # Интервал обновления: 24 часа
@@ -299,43 +239,164 @@ rule-providers:
     path: ./rules/geosite_telegram.mrs
 
 # -----------------------------------------------------------------------------
+# DNS
+# -----------------------------------------------------------------------------
+# Чёрный список -> DoH через группу PROXY (по IP, без резолва имени)
+# Исключения DIRECT и всё остальное -> DNS текущей сети (локальный/роутера/провайдера)
+dns:
+  enable: true
+  ipv6: false
+
+  # Использование локальных сопоставлений domain -> ip
+  use-hosts: true  
+  # Использование системных сопоставлений domain -> ip
+  use-system-hosts: true
+
+  # Режим работы DNS:
+  # redir-host — возврат реальных IP (лучше для совместимости с белым списком);
+  # fake-ip — возврат виртуальных IP из пула (быстрее, но может обнаруживаться приложениями).
+  enhanced-mode: redir-host
+
+  # Резолв имён DNS-серверов, только IP
+  default-nameserver:
+    - 77.88.8.8
+    - 77.88.8.1
+
+  # Резолв имён PROXY-серверов
+  proxy-server-nameserver:
+    - 77.88.8.8
+    - 77.88.8.1
+
+  # Запросы не попадающие под правила политик nameserver-policy
+  nameserver:
+    - system
+
+  # Серверы для доменов, попадающих под DIRECT-правила
+  direct-nameserver:
+    - system
+
+  # Работает только при непустом direct-nameserver
+  # true: сначала проверяется nameserver-policy, и если домен там есть, берётся его DNS (например, DoH через #PROXY). Остальное идёт в direct-nameserver.
+  # false: mihomo сам резолвит домен для соединения с выходом DIRECT, он использует только direct-nameserver и игнорирует политики
+  # В данном случае false, нужен чтобы любое DIRECT-соединение резолвилось DNS текущей сети.
+  direct-nameserver-follow-policy: false
+
+  # Правила выбора dns-сервера
+  nameserver-policy:
+    "rule-set:geosite-bitwarden": system
+    "rule-set:geosite-discord": &doh_proxy
+      - https://1.1.1.1/dns-query#PROXY
+      - https://8.8.8.8/dns-query#PROXY
+    "rule-set:geosite-telegram": *doh_proxy
+    "rule-set:geosite-instagram": *doh_proxy
+    "rule-set:geosite-youtube": *doh_proxy
+    "rule-set:geosite-direct": system
+    "rule-set:geosite-google": *doh_proxy
+    "rule-set:geosite-proxy": *doh_proxy
+    "+.dnsleaktest.com": *doh_proxy
+    "+.myip.com": *doh_proxy
+    "+.2ip.io": *doh_proxy
+    "+.ip.sb": *doh_proxy
+    "+.ipip.net": *doh_proxy
+    "+.ipwho.is": *doh_proxy
+  
+  # ---- fake-ip: Заготовка (работает, когда клиент включит fake-ip) ----
+  # ---- Вариант 1 (Режим правил) ---
+  # Логика как в rules: сверху вниз. real-ip = настоящий адрес от DNS сети
+  fake-ip-filter-mode: rule
+  fake-ip-filter:
+    - RULE-SET,geosite-direct,real-ip
+    - RULE-SET,geosite-bitwarden,real-ip
+    - RULE-SET,geosite-discord,fake-ip
+    - RULE-SET,geosite-telegram,fake-ip
+    - RULE-SET,geosite-instagram,fake-ip
+    - RULE-SET,geosite-youtube,fake-ip
+    - RULE-SET,geosite-google,fake-ip
+    - RULE-SET,geosite-proxy,fake-ip
+    - DOMAIN-SUFFIX,dnsleaktest.com,fake-ip
+    - DOMAIN-SUFFIX,myip.com,fake-ip
+    - DOMAIN-SUFFIX,2ip.io,fake-ip
+    - DOMAIN-SUFFIX,ip.sb,fake-ip
+    - DOMAIN-SUFFIX,ipip.net,fake-ip
+    - DOMAIN-SUFFIX,ipwho.is,fake-ip
+    - MATCH,real-ip
+  # ---- Вариант 2 (Fake-ip для всего, кроме исключений) ----
+  # fake-ip-filter-mode: blacklist
+  # fake-ip-filter:
+  #   # Локальные сети
+  #   - "+.lan"
+  #   - "+.local"
+  #   - "+.localdomain"
+  #   - "+.home.arpa"
+  #   - "+.internal"
+  #   # Российские домены
+  #   - "+.ru"
+  #   - "+.su"
+  #   - "+.xn--p1ai"
+  #   - "rule-set:geosite-direct"
+  #   # Служебное
+  #   - "rule-set:geosite-bitwarden"
+  #   - "stun.*.*.*"
+  #   - "stun.*.*"
+  #   - "+.msftconnecttest.com"
+  #   - "+.msftncsi.com"
+  #   - "time.*.com"
+  #   - "ntp.*.com"
+  #   - "+.pool.ntp.org"
+
+# -----------------------------------------------------------------------------
 # Rules
 # -----------------------------------------------------------------------------
 rules:
 # 🏠 Локальная сеть
   - GEOIP,PRIVATE,DIRECT,no-resolve
-  - GEOSITE,PRIVATE,DIRECT
+  - OR,((DOMAIN-SUFFIX,lan),(DOMAIN-SUFFIX,local),(DOMAIN-SUFFIX,localhost)),DIRECT
 
-# 🚫 BLOCK ---------------------------------------------------------------------
+# 🚫 BLOCK
   # HTTP3/QUIC
   - AND,((NETWORK,UDP),(DST-PORT,443)),REJECT-DROP
+
+  # NetBIOS
+  - AND,((NETWORK,UDP),(DST-PORT,135/137-139)),REJECT-DROP
   
-  # IPv6-трафик, не попавший в fake-ip
+  # IPv6-трафик
   - IP-CIDR,::/0,REJECT-DROP,no-resolve
 
-  # Windows NetBIOS/SMB
-  - AND,((NETWORK,udp),(DST-PORT,135,137-139)),REJECT
+# 🔬 Tests
+  - OR,((DOMAIN-SUFFIX,dnsleaktest.com),(DOMAIN-SUFFIX,myip.com),(DOMAIN-SUFFIX,2ip.io),(DOMAIN-SUFFIX,ip.sb),(DOMAIN-SUFFIX,ipip.net),(DOMAIN-SUFFIX,ipwho.is)),PROXY
 
-# Tests ------------------------------------------------------------------------
-  - OR,((DOMAIN-SUFFIX,myip.com),(DOMAIN-SUFFIX,dnsleaktest.com)),PROXY
-  - OR,((DOMAIN-SUFFIX,2ip.io),(DOMAIN-SUFFIX,ip.sb),(DOMAIN-SUFFIX,ipip.net),(DOMAIN-SUFFIX,ipwho.is)),PROXY
-
-# ➡️ DIRECT --------------------------------------------------------------------
-  - RULE-SET,apps-direct,DIRECT # 📦 Процессы
-  - RULE-SET,geoip-direct,DIRECT
-  - RULE-SET,geosite-direct,DIRECT
+# 📦 Services
+  - RULE-SET,apps-direct,DIRECT
   - RULE-SET,geosite-bitwarden,DIRECT
 
-# 🔁 PROXY ---------------------------------------------------------------------
+  - PROCESS-NAME-REGEX,(?i)^discord,DISCORD
   - RULE-SET,geosite-telegram,TELEGRAM
-  - PROCESS-NAME-REGEX,discord,DISCORD
   - RULE-SET,geosite-discord,DISCORD
   - RULE-SET,geosite-instagram,INSTAGRAM
   - RULE-SET,geosite-youtube,YOUTUBE
+  - RULE-SET,apps-proxy,PROXY
+
+# 🌐 Rule-sets
+  - RULE-SET,geosite-direct,DIRECT
   - RULE-SET,geosite-google,PROXY
-  - RULE-SET,apps-proxy,PROXY # 📦 Процессы
-  - RULE-SET,geoip-proxy,PROXY
   - RULE-SET,geosite-proxy,PROXY
 
-# 🏁 FINAL ---------------------------------------------------------------------
+# 🔢 IP-sets and udp-ports
+  - RULE-SET,geoip-direct,DIRECT,no-resolve
+
+# По порту сервис не определить: подписи справочные
+# --- STUN/TURN (общие) ---
+  - AND,((NETWORK,UDP),(DST-PORT,3478/3480/3484)),PROXY
+# --- Discord ---
+  - AND,((NETWORK,UDP),(DST-PORT,50000-50030)),PROXY
+# --- Telegram (релеи звонков) ---
+  - AND,((NETWORK,UDP),(DST-PORT,596-599/1400)),PROXY
+# --- Google Meet ---
+  - AND,((NETWORK,UDP),(DST-PORT,19302-19309)),PROXY
+# --- Под вопросом (обычно TCP) ---
+  - AND,((NETWORK,UDP),(DST-PORT,5222)),PROXY
+
+  - RULE-SET,geoip-proxy,PROXY,no-resolve
+
+# 🏁 FINAL
   - MATCH,DIRECT
